@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PakEarn Pro</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        /* Add new styles */
+        .task-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            display: none;
+            z-index: 1000;
+        }
+        
+        .task-content {
+            background: white;
+            max-width: 500px;
+            margin: 2rem auto;
+            padding: 1.5rem;
+            border-radius: 10px;
+        }
+
+        .nav-button {
+            margin: 10px 0;
+            padding: 10px 20px;
+            border: 2px solid #2ecc71;
+            border-radius: 8px;
+            background: white;
+        }
+    </style>
+</head>
+<body class="bg-light">
+    <!-- Previous auth section remains same -->
+
+    <!-- Dashboard -->
+    <div id="dashboard" class="container py-4" style="display: none;">
+        <!-- Balance Section -->
+        <div class="dashboard-section">
+            <div class="row">
+                <!-- Balance Cards... -->
+                <div class="col-md-12 text-end">
+                    <button class="btn btn-success" onclick="showWithdrawModal()">Withdraw</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Task Navigation -->
+        <div class="dashboard-section">
+            <div class="row">
+                <div class="col-md-6">
+                    <button class="nav-button w-100" onclick="showSection('availableTasks')">
+                        Available Tasks
+                    </button>
+                </div>
+                <div class="col-md-6">
+                    <button class="nav-button w-100" onclick="showSection('myTasks')">
+                        My Tasks
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Task Sections -->
+        <div id="availableTasks" class="dashboard-section">
+            <h4>Available Tasks</h4>
+            <div id="taskList" class="row"></div>
+        </div>
+
+        <div id="myTasks" class="dashboard-section" style="display: none;">
+            <h4>Completed Tasks</h4>
+            <div id="completedTasksList"></div>
+        </div>
+
+        <!-- Withdraw Modal -->
+        <div class="task-modal" id="withdrawModal">
+            <div class="task-content">
+                <h4>Withdraw Earnings</h4>
+                <div class="mb-3">
+                    <select id="paymentMethod" class="form-select">
+                        <option>JazzCash</option>
+                        <option>EasyPaisa</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <input type="number" id="withdrawAmount" 
+                           class="form-control" 
+                           placeholder="Amount (Min Rs 50)">
+                </div>
+                <button class="btn btn-success" onclick="processWithdrawal()">Confirm</button>
+                <button class="btn btn-danger" onclick="hideModal('withdrawModal')">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Update user structure
+        let users = JSON.parse(localStorage.getItem('users')) || [];
+        let currentUser = null;
+        let tasks = [
+            { id: 1, name: "Facebook Like", reward: 50 },
+            { id: 2, name: "YouTube Watch", reward: 30 },
+            { id: 3, name: "App Review", reward: 100 }
+        ];
+
+        // Add these new functions
+        function showSection(sectionId) {
+            document.querySelectorAll('.dashboard-section').forEach(sec => {
+                sec.style.display = 'none';
+            });
+            document.getElementById(sectionId).style.display = 'block';
+        }
+
+        function showWithdrawModal() {
+            if(currentUser.balance < 50) {
+                alert('Minimum withdrawal amount is Rs 50');
+                return;
+            }
+            document.getElementById('withdrawModal').style.display = 'block';
+        }
+
+        function hideModal(modalId) {
+            document.getElementById(modalId).style.display = 'none';
+        }
+
+        function processWithdrawal() {
+            const amount = parseInt(document.getElementById('withdrawAmount').value);
+            const method = document.getElementById('paymentMethod').value;
+
+            if(amount < 50) {
+                alert('Minimum withdrawal amount is Rs 50');
+                return;
+            }
+
+            if(amount > currentUser.balance) {
+                alert('Insufficient balance');
+                return;
+            }
+
+            // Update user balance
+            currentUser.balance -= amount;
+            currentUser.withdrawn += amount;
+            
+            // Update local storage
+            const index = users.findIndex(u => u.email === currentUser.email);
+            users[index] = currentUser;
+            localStorage.setItem('users', JSON.stringify(users));
+
+            // Send WhatsApp notification
+            const whatsappMessage = `📤 Withdrawal Request:%0A
+💰 Amount: Rs ${amount}%0A
+📱 Method: ${method}%0A
+👤 User: ${currentUser.email}%0A
+📊 Remaining Balance: Rs ${currentUser.balance}`;
+
+            window.open(`https://wa.me/923438220191?text=${encodeURIComponent(whatsappMessage)}`, '_blank');
+            
+            alert('Withdrawal request sent! Processing within 24 hours');
+            hideModal('withdrawModal');
+            updateDashboard();
+        }
+
+        // Update task initialization
+        document.getElementById('taskList').innerHTML = tasks.map(task => `
+            <div class="col-md-4 mb-3">
+                <div class="card">
+                    <div class="card-body">
+                        <h5>${task.name}</h5>
+                        <p>Earn Rs ${task.reward}</p>
+                        <button class="btn btn-success" 
+                                onclick="completeTask(${task.id})">
+                            Start Task
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+
+        function completeTask(taskId) {
+            const task = tasks.find(t => t.id === taskId);
+            
+            // Add to completed tasks
+            if(!currentUser.completedTasks) currentUser.completedTasks = [];
+            currentUser.completedTasks.push(task);
+            
+            // Update balance
+            currentUser.balance += task.reward;
+            currentUser.totalEarned += task.reward;
+
+            // Update local storage
+            const index = users.findIndex(u => u.email === currentUser.email);
+            users[index] = currentUser;
+            localStorage.setItem('users', JSON.stringify(users));
+
+            updateDashboard();
+            alert(`Task completed! Rs ${task.reward} added to your balance`);
+        }
+
+        // Add to updateDashboard function
+        function updateDashboard() {
+            // Previous updates...
+            
+            // Update completed tasks
+            if(currentUser.completedTasks) {
+                document.getElementById('completedTasksList').innerHTML = 
+                    currentUser.completedTasks.map(task => `
+                        <div class="card mb-2">
+                            <div class="card-body">
+                                <h5>${task.name}</h5>
+                                <p>Earned Rs ${task.reward}</p>
+                            </div>
+                        </div>
+                    `).join('');
+            }
+        }
+    </script>
+</body>
+</html>
